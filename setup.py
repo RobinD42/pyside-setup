@@ -6,18 +6,18 @@ or
   python setup.py install --qmake=</path/to/qt/bin/qmake> [--cmake=</path/to/cmake>] [--opnessl=</path/to/openssl/bin>]
 to build and install into your current Python installation.
 
-You can use special option --only-package, if you want to create more binary packages (bdist_egg, bdist_wininst, ...)
-without rebuilding entire PySide every time.
+On Linux you can use option --standalone, to embed Qt libraries to PySide distribution
 
-Examples:
+You can use special option --only-package, if you want to create more binary packages (bdist_egg, bdist_wininst, ...)
+without rebuilding entire PySide every time:
   # First time we create bdist_winist with full PySide build
-  python setup.py bdist_winist --qmake=c:\Qt\4.7.4\bin\qmake.exe --cmake=c:\tools\cmake\bin\cmake.exe --opnessl=c:\libs\OpenSSL32bit\bin
+  python setup.py bdist_winist --qmake=c:\Qt\4.8.4\bin\qmake.exe --cmake=c:\tools\cmake\bin\cmake.exe --opnessl=c:\libs\OpenSSL32bit\bin
   
   # Then we crate bdist_egg reusing PySide build with option --only-package
-  python setup.py bdist_egg --only-package --qmake=c:\Qt\4.7.4\bin\qmake.exe --cmake=c:\tools\cmake\bin\cmake.exe --opnessl=c:\libs\OpenSSL32bit\bin
+  python setup.py bdist_egg --only-package --qmake=c:\Qt\4.8.4\bin\qmake.exe --cmake=c:\tools\cmake\bin\cmake.exe --opnessl=c:\libs\OpenSSL32bit\bin
 
 REQUIREMENTS:
-- Python: 2.6, 2.7 and 3.2 is supported
+- Python: 2.6, 2.7, 3.2 and 3.3 is supported
 - Cmake: Specify the path to cmake with --cmake option or add cmake to the system path.
 - Qt: 4.6, 4.7 and 4.8 is supported. Specify the path to qmake with --qmake option or add qmake to the system path.
 
@@ -88,6 +88,8 @@ from utils import copydir
 from utils import run_process
 from utils import has_option
 from utils import option_value
+from utils import find_vcvarsall
+from utils import get_environment_from_batch_command
 
 # Declare options
 OPTION_DEBUG = has_option("debug")
@@ -99,6 +101,8 @@ OPTION_STANDALONE = has_option("standalone")
 OPTION_VERSION = option_value("version")
 OPTION_LISTVERSIONS = has_option("list-versions")
 OPTION_MAKESPEC = option_value("make-spec")
+OPTION_IGNOREGIT = has_option("ignore-git")
+OPTION_MSVCVERSION = option_value("msvc-version")
 
 if OPTION_QMAKE is None:
     OPTION_QMAKE = find_executable("qmake")
@@ -111,12 +115,22 @@ if sys.platform == "win32":
     if not OPTION_MAKESPEC in ["msvc", "mingw"]:
         print("Invalid option --make-spec. Available values are %s" % (["msvc", "mingw"]))
         sys.exit(1)
+    if OPTION_MSVCVERSION:
+        if OPTION_MAKESPEC != "msvc":
+            print("Option --msvc-version can be used only with option --make-spec=msvc")
+            sys.exit(1)
+        if not OPTION_MSVCVERSION in ["9.0", "10.0", "11.0"]:
+            print("Invalid option --msvc-version. Available values are %s" % (["9.0", "10.0", "11.0"]))
+            sys.exit(1)
 else:
     if OPTION_MAKESPEC is None:
         OPTION_MAKESPEC = "make"
     if not OPTION_MAKESPEC in ["make"]:
         print("Invalid option --make-spec. Available values are %s" % (["make"]))
         sys.exit(1)
+
+if sys.platform == 'darwin' and OPTION_STANDALONE:
+    print("--standalone option does not yet work on OSX")
 
 # Show available versions
 if OPTION_LISTVERSIONS:
@@ -138,6 +152,9 @@ script_dir = os.getcwd()
 
 # Change package version
 if OPTION_VERSION:
+    if OPTION_IGNOREGIT:
+        print("Option --version can not be used together with option --ignore-git")
+        sys.exit(1)
     if not os.path.isdir(".git"):
         print("Option --version is available only when pyside-setup was cloned from git repository")
         sys.exit(1)
@@ -148,7 +165,7 @@ Use --list-versions option to get list of available versions""" % OPTION_VERSION
     __version__ = OPTION_VERSION
 
 # Initialize, pull and checkout submodules
-if os.path.isdir(".git"):
+if os.path.isdir(".git") and not OPTION_IGNOREGIT:
     print("Initializing submodules for PySide version %s" % __version__)
     git_update_cmd = ["git", "submodule", "update", "--init"]
     if run_process(git_update_cmd) != 0:
@@ -169,15 +186,14 @@ if os.path.isdir(".git"):
         os.chdir(script_dir)
 
 # Clean up temp and package folders
-for n in ["build", "PySide.egg-info", "PySide-%s" % __version__,
-    "PySide", "pysideuic"]:
+for n in ["pyside_dist", "build", "PySide.egg-info", "PySide-%s" % __version__]:
     d = os.path.join(script_dir, n)
     if os.path.isdir(d):
         print("Removing %s" % d)
         rmtree(d)
 
 # Prepare package folders
-for pkg in ["PySide", "pysideuic"]:
+for pkg in ["pyside_dist/PySide", "pyside_dist/pysideuic"]:
     pkg_dir = os.path.join(script_dir, pkg)
     os.makedirs(pkg_dir)
 
@@ -237,6 +253,43 @@ class pyside_build(_build):
         self.qtinfo = None
     
     def run(self):
+        def update_env_path(newpaths):
+            paths = os.environ['PATH'].lower().split(os.pathsep)
+            for path in newpaths:
+                if not path.lower() in paths:
+                    log.info("Inserting path \"%s\" to environment" % path)
+                    paths.insert(0, path)
+                    os.environ['PATH'] = os.pathsep.join(paths)
+
+        platform_arch = platform.architecture()[0]
+        log.info("Python architekture is %s" % platform_arch)
+        
+        # Try to init the MSVC env
+        if sys.platform == "win32" and OPTION_MSVCVERSION:
+            # Search for MSVC
+            log.info("Searching vcvarsall.bat for MSVC version %s" % OPTION_MSVCVERSION)
+            msvc_version = float(OPTION_MSVCVERSION)
+            vcvarsall_path = find_vcvarsall(msvc_version)
+            if not vcvarsall_path:
+                raise DistutilsSetupError(
+                    "Failed to find the vcvarsall.bat for MSVC version %s." % OPTION_MSVCVERSION)
+            log.info("Found %s" % vcvarsall_path)
+            # Get MSVC env
+            msvc_arch = "x86" if platform_arch.startswith("32") else "amd64"
+            log.info("Getting MSVC env for %s architecture" % msvc_arch)
+            vcvarsall_cmd = ["call", vcvarsall_path, msvc_arch]
+            msvc_env = get_environment_from_batch_command(vcvarsall_path)
+            msvc_env_paths = os.pathsep.join([msvc_env[k] for k in msvc_env if k.upper() == 'PATH']).split(os.pathsep)
+            msvc_env_without_paths = dict([(k, msvc_env[k]) for k in msvc_env if k.upper() != 'PATH'])
+            # Extend os.environ with MSVC env
+            log.info("Initializing MSVC env...")
+            update_env_path(msvc_env_paths)
+            for k in msvc_env_without_paths:
+                v = msvc_env_without_paths[k]
+                log.info("Inserting \"%s = %s\" to environment" % (k, v))
+                os.environ[k] = v
+            log.info("Done initializing MSVC env")
+        
         # Check env
         make_path = None
         make_generator = None
@@ -275,8 +328,12 @@ class pyside_build(_build):
         py_version = "%s.%s" % (sys.version_info[0], sys.version_info[1])
         py_include_dir = get_config_var("INCLUDEPY")
         py_libdir = get_config_var("LIBDIR")
+        py_prefix = get_config_var("prefix")
+        if sys.platform == "win32":
+            py_scripts_dir = os.path.join(py_prefix, "Scripts")
+        else:
+            py_scripts_dir = os.path.join(py_prefix, "bin")
         if py_libdir is None or not os.path.exists(py_libdir):
-            py_prefix = get_config_var("prefix")
             if sys.platform == "win32":
                 py_libdir = os.path.join(py_prefix, "libs")
             else:
@@ -292,44 +349,56 @@ class pyside_build(_build):
                 py_library = os.path.join(py_libdir, "python%s%s.lib" % \
                     (py_version.replace(".", ""), dbgPostfix))
         else:
+            lib_exts = ['.so']
+            if sys.platform == 'darwin':
+                lib_exts.append('.dylib')
             if sys.version_info[0] > 2:
-                py_abiflags = getattr(sys, 'abiflags', None)
-                py_library = os.path.join(py_libdir, "libpython%s%s.so" % \
-                    (py_version, py_abiflags))
-                # Python was compiled as a static library ?
-                if not os.path.exists(py_library):
-                    log.error("Failed to locate the Python library %s" % py_library)
-                    py_library = py_library[:-3] + ".a"
+                lib_suff = getattr(sys, 'abiflags', None)
+            else: # Python 2
+                lib_suff = dbgPostfix
+                lib_exts.append('.so.1')
+            lib_exts.append('.a') # static library as last gasp
+            libs_tried = []
+            for lib_ext in lib_exts:
+                lib_name = "libpython%s%s%s" % (py_version, lib_suff, lib_ext)
+                py_library = os.path.join(py_libdir, lib_name)
+                if os.path.exists(py_library):
+                    break
+                libs_tried.append(py_library)
             else:
-                py_library = os.path.join(py_libdir, "libpython%s%s.so" % \
-                    (py_version, dbgPostfix))
-                if not os.path.exists(py_library):
-                    log.error("Failed to locate the Python library %s" % py_library)
-                    py_library = py_library + ".1"
-                    # Python was compiled as a static library ?
-                    if not os.path.exists(py_library):
-                        log.error("Failed to locate the Python library %s" % py_library)
-                        py_library = py_library[:-5] + ".a"
-        if not os.path.exists(py_library):
-            raise DistutilsSetupError(
-                "Failed to locate the Python library %s" % py_library)
-        
+                py_multiarch = get_config_var("MULTIARCH")
+                if py_multiarch:
+                    try_py_libdir = os.path.join(py_libdir, py_multiarch)
+                    libs_tried = []
+                    for lib_ext in lib_exts:
+                        lib_name = "libpython%s%s%s" % (py_version, lib_suff, lib_ext)
+                        py_library = os.path.join(try_py_libdir, lib_name)
+                        if os.path.exists(py_library):
+                            py_libdir = try_py_libdir
+                            break
+                        libs_tried.append(py_library)
+                    else:
+                        raise DistutilsSetupError(
+                            "Failed to locate the Python library with %s" %
+                            ', '.join(libs_tried))
+                else:
+                    raise DistutilsSetupError(
+                        "Failed to locate the Python library with %s" %
+                        ', '.join(libs_tried))
+            if py_library.endswith('.a'):
+                # Python was compiled as a static library
+                log.error("Failed to locate a dynamic Python library, using %s"
+                          % py_library)
+
         qtinfo = QtInfo(OPTION_QMAKE)
-        
-        # Update os.path
-        paths = os.environ['PATH'].lower().split(os.pathsep)
-        def updatepath(path):
-            if not path.lower() in paths:
-                log.info("Adding path \"%s\" to environment" % path)
-                paths.append(path)
         qt_dir = os.path.dirname(OPTION_QMAKE)
-        updatepath(qt_dir)
-        os.environ['PATH'] = os.pathsep.join(paths)
-        
         qt_version = qtinfo.version
         if not qt_version:
             log.error("Failed to query the Qt version with qmake %s" % qtinfo.qmake_path)
             sys.exit(1)
+        
+        # Update the PATH environment variable
+        update_env_path([py_scripts_dir, qt_dir])
         
         build_name = "py%s-qt%s-%s-%s" % \
             (py_version, qt_version, platform.architecture()[0], build_type.lower())
@@ -369,6 +438,8 @@ class pyside_build(_build):
         log.info("Python executable: %s" % self.py_executable)
         log.info("Python includes: %s" % self.py_include_dir)
         log.info("Python library: %s" % self.py_library)
+        log.info("Python prefix: %s" % py_prefix)
+        log.info("Python scripts: %s" % py_scripts_dir)
         log.info("-" * 3)
         log.info("Qt qmake: %s" % self.qmake_path)
         log.info("Qt version: %s" % qtinfo.version)
@@ -394,7 +465,7 @@ class pyside_build(_build):
             for ext in ['shiboken', 'pyside', 'pyside-tools']:
                 self.build_extension(ext)
 
-        # Build patchelf
+        # Build patchelf if needed
         self.build_patchelf()
 
         # Prepare packages
@@ -406,18 +477,14 @@ class pyside_build(_build):
     def build_patchelf(self):
         if sys.platform != "linux2":
             return
-        
         log.info("Building patchelf...")
-        
         module_src_dir = os.path.join(self.sources_dir, "patchelf")
-        
         build_cmd = [
             "g++",
             "%s/patchelf.cc" % (module_src_dir),
             "-o",
             "patchelf",
         ]
-        
         if run_process(build_cmd, log) != 0:
             raise DistutilsSetupError("Error building patchelf")
 
@@ -438,7 +505,7 @@ class pyside_build(_build):
         
         # Build module
         cmake_cmd = [
-            "cmake",
+            OPTION_CMAKE,
             "-G", self.make_generator,
             "-DQT_QMAKE_EXECUTABLE=%s" % self.qmake_path,
             "-DBUILD_TESTS=False",
@@ -464,7 +531,12 @@ class pyside_build(_build):
             cmake_cmd.append("-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=yes")
             if sys.version_info[0] > 2:
                 cmake_cmd.append("-DUSE_PYTHON3=ON")
-        
+        elif sys.platform == 'darwin':
+            # Work round cmake include problem
+            # http://neilweisenfeld.com/wp/120/building-pyside-on-the-mac
+            # https://groups.google.com/forum/#!msg/pyside/xciZZ4Hm2j8/CUmqfJptOwoJ
+            cmake_cmd.append('-DALTERNATIVE_QT_INCLUDE_DIR=/Library/Frameworks')
+
         log.info("Configuring module %s (%s)..." % (extension,  module_src_dir))
         if run_process(cmake_cmd, log) != 0:
             raise DistutilsSetupError("Error configuring " + extension)
@@ -472,6 +544,11 @@ class pyside_build(_build):
         log.info("Compiling module %s..." % extension)
         if run_process([self.make_path], log) != 0:
             raise DistutilsSetupError("Error compiling " + extension)
+        
+        if extension.lower() == "shiboken":
+            log.info("Generating Shiboken documentation %s..." % extension)
+            if run_process([self.make_path, "doc"], log) != 0:
+                raise DistutilsSetupError("Error generating documentation " + extension)
         
         log.info("Installing module %s..." % extension)
         if run_process([self.make_path, "install/fast"], log) != 0:
@@ -487,7 +564,8 @@ class pyside_build(_build):
             "sources_dir": self.sources_dir,
             "install_dir": self.install_dir,
             "build_dir": self.build_dir,
-            "setup_dir": self.script_dir,
+            "script_dir": self.script_dir,
+            "dist_dir": os.path.join(self.script_dir, 'pyside_dist'),
             "ssl_libs_dir": OPTION_OPENSSL,
             "py_version": self.py_version,
             "qt_version": self.qtinfo.version,
@@ -501,41 +579,52 @@ class pyside_build(_build):
         os.chdir(self.script_dir)
         if sys.platform == "win32":
             return self.prepare_packages_win32(vars)
-        return self.prepare_packages_linux(vars)
+        return self.prepare_packages_posix(vars)
 
-    def prepare_packages_linux(self, vars):
-        # patchelf -> PySide/patchelf
-        copyfile(
-            "{setup_dir}/patchelf",
-            "{setup_dir}/PySide/patchelf",
-            logger=log, vars=vars)
+    def prepare_packages_posix(self, vars):
+        if sys.platform == 'linux2':
+            # patchelf -> PySide/patchelf
+            copyfile(
+                "{script_dir}/patchelf",
+                "{dist_dir}/PySide/patchelf",
+                logger=log, vars=vars)
+            so_ext = '.so'
+            so_star = so_ext + '.*'
+        elif sys.platform == 'darwin':
+            so_ext = '.dylib'
+            so_star = so_ext
+        # <build>/shiboken/doc/html/* -> <setup>/PySide/docs/shiboken
+        copydir(
+            "{build_dir}/shiboken/doc/html",
+            "{dist_dir}/PySide/docs/shiboken",
+            force=False, logger=log, vars=vars)
         # <install>/lib/site-packages/PySide/* -> <setup>/PySide
         copydir(
             "{install_dir}/lib/python{py_version}/site-packages/PySide",
-            "{setup_dir}/PySide",
+            "{dist_dir}/PySide",
             logger=log, vars=vars)
         # <install>/lib/site-packages/shiboken.so -> <setup>/PySide/shiboken.so
         copyfile(
             "{install_dir}/lib/python{py_version}/site-packages/shiboken.so",
-            "{setup_dir}/PySide/shiboken.so",
+            "{dist_dir}/PySide/shiboken.so",
             logger=log, vars=vars)
         # <install>/lib/site-packages/pysideuic/* -> <setup>/pysideuic
         copydir(
             "{install_dir}/lib/python{py_version}/site-packages/pysideuic",
-            "{setup_dir}/pysideuic",
+            "{dist_dir}/pysideuic",
             force=False, logger=log, vars=vars)
         # <install>/bin/pyside-uic -> PySide/scripts/uic.py
         makefile(
-            "{setup_dir}/PySide/scripts/__init__.py",
+            "{dist_dir}/PySide/scripts/__init__.py",
             logger=log, vars=vars)
         copyfile(
             "{install_dir}/bin/pyside-uic",
-            "{setup_dir}/PySide/scripts/uic.py",
+            "{dist_dir}/PySide/scripts/uic.py",
             force=False, logger=log, vars=vars)
         # <install>/bin/* -> PySide/
         copydir(
             "{install_dir}/bin/",
-            "{setup_dir}/PySide",
+            "{dist_dir}/PySide",
             filter=[
                 "pyside-lupdate",
                 "pyside-rcc",
@@ -545,31 +634,33 @@ class pyside_build(_build):
         # <install>/lib/lib* -> PySide/
         copydir(
             "{install_dir}/lib/",
-            "{setup_dir}/PySide",
+            "{dist_dir}/PySide",
             filter=[
-                "libpyside*.so.*",
-                "libshiboken*.so.*",
+                "libpyside*" + so_star,
+                "libshiboken*" + so_star,
             ],
             recursive=False, logger=log, vars=vars)
         # <install>/share/PySide/typesystems/* -> <setup>/PySide/typesystems
         copydir(
             "{install_dir}/share/PySide/typesystems",
-            "{setup_dir}/PySide/typesystems",
+            "{dist_dir}/PySide/typesystems",
             logger=log, vars=vars)
         # <install>/include/* -> <setup>/PySide/include
         copydir(
             "{install_dir}/include",
-            "{setup_dir}/PySide/include",
+            "{dist_dir}/PySide/include",
             logger=log, vars=vars)
         # <sources>/pyside-examples/examples/* -> <setup>/PySide/examples
-        #copydir(
-        #    "{sources_dir}/pyside-examples/examples",
-        #    "{setup_dir}/PySide/examples",
-        #    force=False, logger=log, vars=vars)
+        copydir(
+            "{sources_dir}/pyside-examples/examples",
+            "{dist_dir}/PySide/examples",
+            force=False, logger=log, vars=vars)
         # Copy Qt libs to package
         if OPTION_STANDALONE:
+            if sys.platform == 'darwin':
+                raise RuntimeError('--standalone not yet supported for OSX')
             # <qt>/bin/* -> <setup>/PySide
-            copydir("{qt_bin_dir}", "{setup_dir}/PySide",
+            copydir("{qt_bin_dir}", "{dist_dir}/PySide",
                 filter=[
                     "designer",
                     "linguist",
@@ -579,23 +670,23 @@ class pyside_build(_build):
                 ],
                 recursive=False, logger=log, vars=vars)
             # <qt>/lib/* -> <setup>/PySide
-            copydir("{qt_lib_dir}", "{setup_dir}/PySide",
+            copydir("{qt_lib_dir}", "{dist_dir}/PySide",
                 filter=[
                     "libQt*.so.?",
                     "libphonon.so.?",
                 ],
                 recursive=False, logger=log, vars=vars)
             # <qt>/plugins/* -> <setup>/PySide/plugins
-            copydir("{qt_plugins_dir}", "{setup_dir}/PySide/plugins",
+            copydir("{qt_plugins_dir}", "{dist_dir}/PySide/plugins",
                 filter=["*.so"],
                 logger=log, vars=vars)
             # <qt>/imports/* -> <setup>/PySide/imports
             if float(vars["qt_version"][:3]) > 4.6:
-                copydir("{qt_imports_dir}", "{setup_dir}/PySide/imports",
+                copydir("{qt_imports_dir}", "{dist_dir}/PySide/imports",
                     filter=["qmldir", "*.so"],
                     logger=log, vars=vars)
             # <qt>/translations/* -> <setup>/PySide/translations
-            copydir("{qt_translations_dir}", "{setup_dir}/PySide/translations",
+            copydir("{qt_translations_dir}", "{dist_dir}/PySide/translations",
                 filter=["*.qm"],
                 logger=log, vars=vars)
 
@@ -603,68 +694,73 @@ class pyside_build(_build):
         # <install>/lib/site-packages/PySide/* -> <setup>/PySide
         copydir(
             "{install_dir}/lib/site-packages/PySide",
-            "{setup_dir}/PySide",
+            "{dist_dir}/PySide",
             logger=log, vars=vars)
         if self.debug:
             # <build>/pyside/PySide/*.pdb -> <setup>/PySide
             copydir(
                 "{build_dir}/pyside/PySide",
-                "{setup_dir}/PySide",
+                "{dist_dir}/PySide",
                 filter=["*.pdb"],
                 recursive=False, logger=log, vars=vars)
+        # <build>/shiboken/doc/html/* -> <setup>/PySide/docs/shiboken
+        copydir(
+            "{build_dir}/shiboken/doc/html",
+            "{dist_dir}/PySide/docs/shiboken",
+            force=False, logger=log, vars=vars)
         # <install>/lib/site-packages/shiboken.pyd -> <setup>/PySide/shiboken.pyd
         copyfile(
             "{install_dir}/lib/site-packages/shiboken.pyd",
-            "{setup_dir}/PySide/shiboken.pyd",
+            "{dist_dir}/PySide/shiboken.pyd",
             logger=log, vars=vars)
         # <install>/lib/site-packages/pysideuic/* -> <setup>/pysideuic
         copydir(
             "{install_dir}/lib/site-packages/pysideuic",
-            "{setup_dir}/pysideuic",
+            "{dist_dir}/pysideuic",
             force=False, logger=log, vars=vars)
         # <install>/bin/pyside-uic -> PySide/scripts/uic.py
         makefile(
-            "{setup_dir}/PySide/scripts/__init__.py",
+            "{dist_dir}/PySide/scripts/__init__.py",
             logger=log, vars=vars)
         copyfile(
             "{install_dir}/bin/pyside-uic",
-            "{setup_dir}/PySide/scripts/uic.py",
+            "{dist_dir}/PySide/scripts/uic.py",
             force=False, logger=log, vars=vars)
         # <install>/bin/*.exe,*.dll -> PySide/
         copydir(
             "{install_dir}/bin/",
-            "{setup_dir}/PySide",
+            "{dist_dir}/PySide",
             filter=["*.exe", "*.dll"],
             recursive=False, logger=log, vars=vars)
         # <install>/lib/*.lib -> PySide/
         copydir(
             "{install_dir}/lib/",
-            "{setup_dir}/PySide",
+            "{dist_dir}/PySide",
             filter=["*.lib"],
             recursive=False, logger=log, vars=vars)
         # <install>/share/PySide/typesystems/* -> <setup>/PySide/typesystems
         copydir(
             "{install_dir}/share/PySide/typesystems",
-            "{setup_dir}/PySide/typesystems",
+            "{dist_dir}/PySide/typesystems",
             logger=log, vars=vars)
         # <install>/include/* -> <setup>/PySide/include
         copydir(
             "{install_dir}/include",
-            "{setup_dir}/PySide/include",
+            "{dist_dir}/PySide/include",
             logger=log, vars=vars)
         # <sources>/pyside-examples/examples/* -> <setup>/PySide/examples
-        #copydir(
-        #    "{sources_dir}/pyside-examples/examples",
-        #    "{setup_dir}/PySide/examples",
-        #    force=False, logger=log, vars=vars)
+        copydir(
+            "{sources_dir}/pyside-examples/examples",
+            "{dist_dir}/PySide/examples",
+            force=False, logger=log, vars=vars)
         # <ssl_libs>/* -> <setup>/PySide/
-        copydir("{ssl_libs_dir}", "{setup_dir}/PySide",
+        copydir("{ssl_libs_dir}", "{dist_dir}/PySide",
             filter=[
                 "libeay32.dll",
                 "ssleay32.dll"],
             force=False, logger=log, vars=vars)
         # <qt>/bin/*.dll -> <setup>/PySide
-        copydir("{qt_bin_dir}", "{setup_dir}/PySide",
+        copydir("{qt_bin_dir}", "{dist_dir}/PySide",
             filter=[
                 "*.dll",
                 "designer.exe",
@@ -676,19 +772,19 @@ class pyside_build(_build):
             recursive=False, logger=log, vars=vars)
         if self.debug:
             # <qt>/bin/*d4.dll -> <setup>/PySide
-            copydir("{qt_bin_dir}", "{setup_dir}/PySide",
+            copydir("{qt_bin_dir}", "{dist_dir}/PySide",
                 filter=["*d4.dll"],
                 recursive=False, logger=log, vars=vars)
         # <qt>/plugins/* -> <setup>/PySide/plugins
-        copydir("{qt_plugins_dir}", "{setup_dir}/PySide/plugins",
+        copydir("{qt_plugins_dir}", "{dist_dir}/PySide/plugins",
             filter=["*.dll"],
             logger=log, vars=vars)
         # <qt>/imports/* -> <setup>/PySide/imports
-        copydir("{qt_imports_dir}", "{setup_dir}/PySide/imports",
+        copydir("{qt_imports_dir}", "{dist_dir}/PySide/imports",
             filter=["qmldir", "*.dll"],
             logger=log, vars=vars)
         # <qt>/translations/* -> <setup>/PySide/translations
-        copydir("{qt_translations_dir}", "{setup_dir}/PySide/translations",
+        copydir("{qt_translations_dir}", "{dist_dir}/PySide/translations",
             filter=["*.qm"],
             logger=log, vars=vars)
 
@@ -699,7 +795,7 @@ setup(
     name = "PySide",
     version = __version__,
     description = ("Python bindings for the Qt cross-platform application and UI framework"),
-    long_description = read('README.txt'),
+    long_description = read('README.rst'),
     options = {
         "bdist_wininst": {
             "install_script": "pyside_postinstall.py",
@@ -716,11 +812,14 @@ setup(
         'Environment :: Console',
         'Environment :: MacOS X',
         'Environment :: X11 Applications :: Qt',
+        'Environment :: Win32 (MS Windows)',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)',
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: POSIX',
         'Operating System :: POSIX :: Linux',
+        'Operating System :: Microsoft',
+        'Operating System :: Microsoft :: Windows',
         'Programming Language :: C++',
         'Programming Language :: Python',
         'Programming Language :: Python :: 2',
@@ -728,6 +827,7 @@ setup(
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.2',
+        'Programming Language :: Python :: 3.3',
         'Topic :: Database',
         'Topic :: Software Development',
         'Topic :: Software Development :: Code Generators',
@@ -742,6 +842,8 @@ setup(
     download_url = 'http://releases.qt-project.org/pyside',
     license = 'LGPL',
     packages = ['PySide', 'pysideuic'],
+    package_dir = {'PySide': 'pyside_dist/PySide',
+                   'pysideuic': 'pyside_dist/pysideuic'},
     include_package_data = True,
     zip_safe = False,
     entry_points = {

@@ -20,25 +20,64 @@ Compatibility
 
 PySide requires Python 2.6 or later and Qt 4.6 or better.
 
-Installing PySide from source on a Windows System
-=================================================
+Installation
+============
+
+Installing PySide on a Windows System
+-------------------------------------
+
+There are two options to install PySide on Windows:
+
+#. Download and install the packages from the `releases page
+   <http://releases.qt-project.org/pyside/>`_.
+
+#. Use setuptools:
+   
+   ::
+
+      c:\> c:\Python27\Scripts\easy_install PySide
+      c:\> c:\Python27\python.exe c:\Python27\Scripts\pyside_postinstall.py -install
+   
+   Note that the post-install procedure is not needed when installing via installer.
+   The installer calls the pyside_postinstall.py script automatically.
+
+Installing PySide on a UNIX System
+----------------------------------
+
+There are no prebuild setuptools distributions available for UNIX System.
+To build and install setuptools compatible distributions for UNIX System,
+please read the instructions in section ``Building PySide on a UNIX System``.
+
+Using pip vs easy_install
+-------------------------
+
+Pip can install only from source (it does not support binary distributions) and allways rebuilds the distribution
+before the distribution is installed to system. For that reason the recommended tool to install the ``PySide``
+is easy_install.
+
+Building PySide on a Windows System
+===================================
 
 Installing prerequisities
 -------------------------
 
-#. Install `Python 2.7
-   <http://python.org/download/releases/2.7.3/>`_.
+#. Install `Python
+   <http://www.python.org/download/>`_.
 
 #. Install `Qt 4.8 libraries for Windows (VS 2008)
-   <http://releases.qt-project.org/qt4/source/qt-win-opensource-4.8.2-vs2008.exe>`_.
+   <http://releases.qt-project.org/qt4/source/qt-win-opensource-4.8.4-vs2008.exe>`_.
 
-#. Install `Cmake 2.8
+#. Install `Cmake
    <http://www.cmake.org/cmake/resources/software.html>`_.
 
-#. Install `MS Visual Studio Express 2008
-   <http://www.microsoft.com/express/Downloads/>`_.
+#. Install `Visual Studio Express 2008
+   <http://www.microsoft.com/express/Downloads/>`_
+   when building against Python 2.6, 2.7 or 3.2.
+   Install `Visual Studio Express 2010
+   <http://www.microsoft.com/visualstudio/eng/products/visual-studio-2010-express>`_
+   when building against Python 3.3.
 
-#. Install `Git 1.7
+#. Install `Git
    <http://git-scm.com/download/win>`_.
 
 #. (Optional) Install `OpenSSL
@@ -54,49 +93,10 @@ Installing prerequisities
 
       c:\> c:\Python27\python distribute_setup.py
 
-#. Use that Python's `bin/easy_install` to install `virtualenv`:
+Building PySide distribution
+----------------------------
 
-   ::
-
-      c:\> c:\Python27\Scripts\easy_install virtualenv
-
-#. Use that Python's virtualenv to make a workspace:
-
-   ::
-
-      c:\> c:\Python27\Scripts\virtualenv env
-
-#. Open Visual Studio 2008 Command Prompt:
-
-   ::
-
-      c:\> c:\ProgramData\Microsoft\Windows\Start Menu\Programs\Microsoft Visual Studio 2008\Visual Studio Tools\Visual Studio 2008 Command Prompt.lnk
-
-#. Switch to the ``env`` directory:
-
-   ::
-
-      c:\> cd env
-
-Installing PySide
------------------
-
-Use ``pip`` to get `PySide` installed:
-
-::
-
-   c:\env> Scripts\pip install PySide --install-option="--qmake=c:\\Qt\\4.8.2\\bin\\qmake.exe"
-
-Optionally you can specify the path to OpenSSL libs:
-
-::
-
-   c:\env> Scripts\pip install PySide --install-option="--openssl=c:\\OpenSSL32bit\\bin" --install-option="--qmake=c:\\Qt\\4.8.2\\bin\\qmake.exe"
-
-Building PySide installer
--------------------------
-
-#. Clone ``PySide`` from git repository:
+#. Clone ``PySide`` setup scripts from git repository:
 
    ::
 
@@ -112,10 +112,18 @@ Building PySide installer
 
    ::
 
-      c:\> c:\Python27\python setup.py bdist_wininst --qmake=c:\Qt\4.8.2\bin\qmake.exe --openssl=c:\OpenSSL32bit\bin
+      c:\> c:\Python27\python.exe setup.py bdist_wininst --msvc-version=9.0 --qmake=c:\Qt\4.8.4\bin\qmake.exe --openssl=c:\OpenSSL32bit\bin
 
-Installing PySide from source on a UNIX System (Ubuntu 12.04 LTS)
-=================================================================
+#. After the successful build, install the distribution with easy_install
+   and run the post-install script:
+   
+   ::
+
+      c:\> c:\Python27\Scripts\easy_install dist\PySide-1.1.2.win32-py2.7.exe
+      c:\> c:\Python27\python.exe c:\Python27\Scripts\pyside_postinstall.py -install
+
+Building PySide on a UNIX System (Ubuntu 12.04 LTS)
+===================================================
 
 Installing prerequisities
 -------------------------
@@ -152,45 +160,12 @@ Installing prerequisities
 
    ::
 
-      $ sudo python distribute_setup.py
+      $ sudo python2.7 distribute_setup.py
 
-#. Use that Python's `bin/easy_install` to install `virtualenv`:
+Building PySide distribution
+----------------------------
 
-   ::
-
-      $ sudo easy_install virtualenv
-
-#. Use that Python's virtualenv to make a workspace:
-
-   ::
-
-      $ virtualenv env
-
-Installing PySide
------------------
-
-Use ``pip`` to get `PySide` installed from PyPI:
-
-::
-
-   $ env/bin/pip install PySide
-
-Alternatively you can install development version of `PySide` from github repository:
-
-::
-
-   $ env/bin/pip install git+https://github.com/PySide/pyside-setup.git
-
-You can also specify version of `PySide` when installing from github repository:
-
-::
-
-   $ env/bin/pip install git+https://github.com/PySide/pyside-setup.git@1.1.1
-
-Building PySide distribution egg
---------------------------------
-
-#. Clone ``PySide`` from git repository:
+#. Clone ``PySide`` setup scripts from git repository:
 
    ::
 
@@ -202,17 +177,101 @@ Building PySide distribution egg
 
       $ cd pyside-setup
 
-#. Build ``PySide`` distribution egg:
+#. Build ``PySide`` distribution:
 
    ::
 
-      $ env/bin/python setup.py bdist_egg
+      $ python2.7 setup.py bdist_egg
 
-#. Optionally you can build standalone version of distribution egg with embedded Qt libs:
+#. Optionally you can build standalone version of distribution with embedded Qt libs:
 
    ::
 
-      $ env/bin/python setup.py bdist_egg --standalone
+      $ python2.7 setup.py bdist_egg --standalone
+
+#. After the successful build, install the distribution with easy_install
+   and run the post-install script:
+   
+   ::
+
+      $ sudo easy_install-2.7 dist/PySide-1.1.2.egg
+      $ sudo python2.7 pyside_postinstall.py -install
+
+PySide Setup Script command line options
+========================================
+
+Usage on Windows System
+-----------------------
+
+   ::
+
+      c:\> c:\Python27\python.exe setup.py [distribution_type] [options]
+
+Usage on UNIX System
+--------------------
+
+   ::
+
+      python2.7 setup.py [distribution_type] [options]
+
+Distribution types
+------------------
+
+``bdist_wininst``
+    Create standalone windows installer with embedded Qt libs and development tools.
+    This distribution type can be installed with ``easy_install``.
+   
+``bdist_egg``
+    Create egg binary distribution.
+    This distribution type can be installed with ``easy_install``.
+      
+``sdist``
+    Create full source distribution with included sources of PySide Setup Scripts,
+    PySide, Shiboken, PySide Tools and PySide Examples.
+    Can be used to build binary distribution in offline mode.
+
+Options
+-------
+
+``--qmake``
+    Specify the path to qmake.
+    Useful when the qmake is not in path or more than one Qt versions are installed.
+
+``--cmake``
+    Specify the path to cmake.
+    Useful when the cmake is not in path.
+
+``--msvc-version``
+    Specify the Visual C++ compiler version. 
+    Supported values are ``9.0``, ``10.0``, ``11.0``.
+    This option adds support for building windows binaries outside the Visual Studio Command Prompt.
+    The MSVC environment is properly initialized by setup script.
+
+``--openssl``
+    Specify the path to OpenSSL libs.
+
+``--only-package``
+    Create distribution from prebuilt PySide binaries.
+    Before using this option first time, the full distribution build is required.
+
+``--standalone``
+    When enabled, all required Qt libs will be included in PySide distribution.
+    This option is allways enabled on Windows System.
+    On Linux it's disabled by default.
+
+``--version``
+    Specify what version of PySide distribution to build.
+    This option is available only when the setup scripts are cloned from git repository.
+
+``--list-versions``
+    List available versions of PySide distributions.
+
+``--ignore-git``
+    Don't pull sources from git repository.
+
+``--make-spec``
+    Specify the cmake makefile generator type.
+    Available values are ``msvc`` on Windows System and ``make`` on UNIX System.
 
 Feedback and getting involved
 =============================
