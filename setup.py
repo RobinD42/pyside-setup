@@ -43,7 +43,7 @@ submodules = {
     '1.1.2en': [
         ["shiboken", "1.1.2en"],
         ["pyside", "1.1.2en"],
-        ["pyside-tools", "master"],        
+        ["pyside-tools", "1.1.2en"],        
     ],
     '1.1.2': [
         ["shiboken", "1.1.2"],
@@ -541,17 +541,22 @@ class pyside_build(_build):
             if sys.version_info[0] > 2:
                 cmake_cmd.append("-DUSE_PYTHON3=ON")
         elif sys.platform == 'darwin':
-            # Work round cmake include problem
-            # http://neilweisenfeld.com/wp/120/building-pyside-on-the-mac
-            # https://groups.google.com/forum/#!msg/pyside/xciZZ4Hm2j8/CUmqfJptOwoJ
-            cmake_cmd.append('-DALTERNATIVE_QT_INCLUDE_DIR=/Library/Frameworks')
+            if 'QTDIR' in os.environ:
+                # If the user has QTDIR set, then use it as a prefix for an extra include path
+                cmake_cmd.append('-DALTERNATIVE_QT_INCLUDE_DIR=%s/include' % os.environ['QTDIR'])
+            else:
+                # Otherwise assume it is a standard install and add the
+                # Frameworks folder as a workaround for a cmake include problem
+                # http://neilweisenfeld.com/wp/120/building-pyside-on-the-mac
+                # https://groups.google.com/forum/#!msg/pyside/xciZZ4Hm2j8/CUmqfJptOwoJ
+                cmake_cmd.append('-DALTERNATIVE_QT_INCLUDE_DIR=/Library/Frameworks')
 
         log.info("Configuring module %s (%s)..." % (extension,  module_src_dir))
         if run_process(cmake_cmd, log) != 0:
             raise DistutilsSetupError("Error configuring " + extension)
         
         log.info("Compiling module %s..." % extension)
-        if run_process([self.make_path], log) != 0:
+        if run_process([self.make_path, '-j4'], log) != 0:
             raise DistutilsSetupError("Error compiling " + extension)
         
         if extension.lower() == "shiboken":

@@ -6,7 +6,7 @@
 	url = https://github.com/RobinD42/pyside.git
 [submodule "sources/pyside-tools"]
 	path = sources/pyside-tools
-	url = https://github.com/enthought/PySide-Tools.git
+url=https://github.com/RobinD42/pyside-tools.git
 [submodule "sources/pyside-examples"]
 	path = sources/pyside-examples
 	url = https://git.gitorious.org/pyside/pyside-examples.git
