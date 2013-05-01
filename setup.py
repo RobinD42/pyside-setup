@@ -31,7 +31,6 @@ Building 64bit version is not supported with Visual Studio 2008 Express Edition.
 """
 
 __version__ = "1.1.3dev"
-__version__ = "1.1.2en"
 
 submodules = {
     __version__: [
@@ -539,10 +538,10 @@ class pyside_build(_build):
         if run_process([self.make_path, '-j4'], log) != 0:
             raise DistutilsSetupError("Error compiling " + extension)
         
-        if extension.lower() == "shiboken":
-            log.info("Generating Shiboken documentation %s..." % extension)
-            if run_process([self.make_path, "doc"], log) != 0:
-                raise DistutilsSetupError("Error generating documentation " + extension)
+        #if extension.lower() == "shiboken":
+        #    log.info("Generating Shiboken documentation %s..." % extension)
+        #    if run_process([self.make_path, "doc"], log) != 0:
+        #        raise DistutilsSetupError("Error generating documentation " + extension)
         
         log.info("Installing module %s..." % extension)
         if run_process([self.make_path, "install/fast"], log) != 0:
