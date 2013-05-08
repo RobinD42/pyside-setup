@@ -1,5 +1,6 @@
 /build
 /dist
+/dist.*
 /pyside_build
 /pyside_dist
 /pyside_package
