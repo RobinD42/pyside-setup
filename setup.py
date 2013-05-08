@@ -43,6 +43,7 @@ submodules = {
         ["shiboken", "1.1.2en"],
         ["pyside", "1.1.2en"],
         ["pyside-tools", "1.1.2en"],        
+        #["pyside-examples", "master"],
     ],
     '1.1.2': [
         ["shiboken", "1.1.2"],
@@ -645,10 +646,10 @@ class pyside_build(_build):
             "{dist_dir}/PySide/include",
             logger=log, vars=vars)
         # <sources>/pyside-examples/examples/* -> <setup>/PySide/examples
-        copydir(
-            "{sources_dir}/pyside-examples/examples",
-            "{dist_dir}/PySide/examples",
-            force=False, logger=log, vars=vars)
+        #copydir(
+        #    "{sources_dir}/pyside-examples/examples",
+        #    "{dist_dir}/PySide/examples",
+        #    force=False, logger=log, vars=vars)
         # Copy Qt libs to package
         if OPTION_STANDALONE:
             if sys.platform == 'darwin':
@@ -749,10 +750,10 @@ class pyside_build(_build):
             "{dist_dir}/PySide/include",
             logger=log, vars=vars)
         # <sources>/pyside-examples/examples/* -> <setup>/PySide/examples
-        copydir(
-            "{sources_dir}/pyside-examples/examples",
-            "{dist_dir}/PySide/examples",
-            force=False, logger=log, vars=vars)
+        #copydir(
+        #    "{sources_dir}/pyside-examples/examples",
+        #    "{dist_dir}/PySide/examples",
+        #    force=False, logger=log, vars=vars)
         # <ssl_libs>/* -> <setup>/PySide/
         copydir("{ssl_libs_dir}", "{dist_dir}/PySide",
             filter=[
