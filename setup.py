@@ -43,7 +43,7 @@ submodules = {
         ["shiboken", "1.1.2en"],
         ["pyside", "1.1.2en"],
         ["pyside-tools", "1.1.2en"],        
-        #["pyside-examples", "master"],
+        ["pyside-examples", "master"],
     ],
     '1.1.2': [
         ["shiboken", "1.1.2"],
@@ -528,7 +528,7 @@ class pyside_build(_build):
                 cmake_cmd.append("-DCMAKE_DEBUG_POSTFIX=_d")
                 
         if extension.lower() == "shiboken":
-            cmake_cmd.append("-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=yes")
+            #cmake_cmd.append("-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=yes")
             if sys.version_info[0] > 2:
                 cmake_cmd.append("-DUSE_PYTHON3=ON")
         elif sys.platform == 'darwin':
@@ -547,7 +547,7 @@ class pyside_build(_build):
             raise DistutilsSetupError("Error configuring " + extension)
         
         log.info("Compiling module %s..." % extension)
-        if run_process([self.make_path, '-j4'], log) != 0:
+        if run_process([self.make_path, '-j4', 'VERBOSE=10'], log) != 0:
             raise DistutilsSetupError("Error compiling " + extension)
         
         #if extension.lower() == "shiboken":
