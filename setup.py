@@ -42,7 +42,7 @@ submodules = {
     '1.1.2en': [
         ["shiboken", "1.1.2en"],
         ["pyside", "1.1.2en"],
-        ["pyside-tools", "1.1.2en"],        
+        ["pyside-tools", "master"],        
         ["pyside-examples", "master"],
     ],
     '1.1.2': [
@@ -346,6 +346,8 @@ class pyside_build(_build):
         py_include_dir = get_config_var("INCLUDEPY")
         py_libdir = get_config_var("LIBDIR")
         py_prefix = get_config_var("prefix")
+        if not py_prefix or not os.path.exists(py_prefix):
+            py_prefix = sys.prefix
         if sys.platform == "win32":
             py_scripts_dir = os.path.join(py_prefix, "Scripts")
         else:
@@ -355,6 +357,11 @@ class pyside_build(_build):
                 py_libdir = os.path.join(py_prefix, "libs")
             else:
                 py_libdir = os.path.join(py_prefix, "lib")
+        if py_include_dir is None or not os.path.exists(py_include_dir):
+            if sys.platform == "win32":
+                py_include_dir = os.path.join(py_prefix, "include")
+            else:
+                py_include_dir = os.path.join(py_prefix, "include/python%s" % py_version)
         dbgPostfix = ""
         if build_type == "Debug":
             dbgPostfix = "_d"
@@ -424,6 +431,13 @@ class pyside_build(_build):
         sources_dir = os.path.join(script_dir, "sources")
         build_dir = os.path.join(script_dir, os.path.join("pyside_build", "%s" % build_name))
         install_dir = os.path.join(script_dir, os.path.join("pyside_install", "%s" % build_name))
+        
+        # Try to ensure that tools built by this script (such as shiboken)
+        # are found before any that may already be installed on the system.
+        update_env_path([os.path.join(install_dir, 'bin')], log)
+        
+        # Tell cmake to look here for *.cmake files 
+        os.environ['CMAKE_PREFIX_PATH'] = install_dir
         
         self.make_path = make_path
         self.make_generator = make_generator
@@ -518,7 +532,7 @@ class pyside_build(_build):
             log.info("Deleting module build folder %s..." % module_build_dir)
             rmtree(module_build_dir)
         log.info("Creating module build folder %s..." % module_build_dir)
-        os.mkdir(module_build_dir)
+        os.makedirs(module_build_dir)
         os.chdir(module_build_dir)
         
         module_src_dir = os.path.join(self.sources_dir, extension)
@@ -557,7 +571,7 @@ class pyside_build(_build):
         elif sys.platform == 'darwin':
             if 'QTDIR' in os.environ:
                 # If the user has QTDIR set, then use it as a prefix for an extra include path
-                cmake_cmd.append('-DALTERNATIVE_QT_INCLUDE_DIR=%s/include' % os.environ['QTDIR'])
+                cmake_cmd.append('-DALTERNATIVE_QT_INCLUDE_DIR={0}/include:{0}/lib'.format(os.environ['QTDIR']))
             else:
                 # Otherwise assume it is a standard install and add the
                 # Frameworks folder as a workaround for a cmake include problem
@@ -570,13 +584,13 @@ class pyside_build(_build):
             raise DistutilsSetupError("Error configuring " + extension)
         
         log.info("Compiling module %s..." % extension)
-        if run_process([self.make_path, '-j4'], log) != 0:
+        if run_process([self.make_path], log) != 0:
             raise DistutilsSetupError("Error compiling " + extension)
         
-        #if extension.lower() == "shiboken":
-        #    log.info("Generating Shiboken documentation %s..." % extension)
-        #    if run_process([self.make_path, "doc"], log) != 0:
-        #        raise DistutilsSetupError("Error generating documentation " + extension)
+        if extension.lower() == "shiboken":
+            log.info("Generating Shiboken documentation %s..." % extension)
+            if run_process([self.make_path, "doc"], log) != 0:
+                raise DistutilsSetupError("Error generating documentation " + extension)
         
         log.info("Installing module %s..." % extension)
         if run_process([self.make_path, "install/fast"], log) != 0:
