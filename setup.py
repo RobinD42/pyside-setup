@@ -30,7 +30,8 @@ On Windows You need to execute this script from Visual Studio 2008 Command Promp
 Building 64bit version is not supported with Visual Studio 2008 Express Edition.
 """
 
-__version__ = "1.1.3dev"
+#__version__ = "1.1.3dev"
+__version__ = "1.1.2en"
 
 submodules = {
     __version__: [
