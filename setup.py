@@ -26,24 +26,16 @@ OpenSSL: You can specify the location of OpenSSL DLLs with option --opnessl=</pa
     You can download OpenSSL for windows here: http://slproweb.com/products/Win32OpenSSL.html
 
 NOTES:
-On Windows You need to execute this script from Visual Studio 2008 Command Prompt.
 Building 64bit version is not supported with Visual Studio 2008 Express Edition.
 """
 
-#__version__ = "1.1.3dev"
-__version__ = "1.1.2en"
+__version__ = "1.2.0"
 
 submodules = {
     __version__: [
-        ["shiboken", "master"],
-        ["pyside", "master"],
-        ["pyside-tools", "master"],
-        ["pyside-examples", "master"],
-    ],
-    '1.1.2en': [
-        ["shiboken", "1.1.2en"],
-        ["pyside", "1.1.2en"],
-        ["pyside-tools", "master"],        
+        ["shiboken", "1.2.0"],
+        ["pyside", "1.2.0"],
+        ["pyside-tools", "0.2.14"],
         ["pyside-examples", "master"],
     ],
     '1.1.2': [
@@ -110,6 +102,7 @@ OPTION_MSVCVERSION = option_value("msvc-version")
 OPTION_NOEXAMPLES = has_option("no-examples")     # don't include pyside-examples
 OPTION_JOBS = option_value('jobs')                # number of parallel build jobs
 OPTION_JOM = has_option('jom')                    # use jom instead of nmake with msvc
+OPTION_BUILDTESTS = has_option("build-tests")
 
 if OPTION_QMAKE is None:
     OPTION_QMAKE = find_executable("qmake")
@@ -293,6 +286,7 @@ class pyside_build(_build):
         self.py_version = None
         self.build_type = "Release"
         self.qtinfo = None
+        self.build_tests = False
     
     def run(self):
         platform_arch = platform.architecture()[0]
@@ -455,10 +449,12 @@ class pyside_build(_build):
         self.build_type = build_type
         self.qtinfo = qtinfo
         self.site_packages_dir = get_python_lib(1, 0, prefix=install_dir)
+        self.build_tests = OPTION_BUILDTESTS
         
         log.info("=" * 30)
         log.info("Package version: %s" % __version__)
         log.info("Build type: %s" % self.build_type)
+        log.info("Build tests: %s" % self.build_tests)
         log.info("-" * 3)
         log.info("Make path: %s" % self.make_path)
         log.info("Make generator: %s" % self.make_generator)
@@ -543,7 +539,7 @@ class pyside_build(_build):
             OPTION_CMAKE,
             "-G", self.make_generator,
             "-DQT_QMAKE_EXECUTABLE=%s" % self.qmake_path,
-            "-DBUILD_TESTS=False",
+            "-DBUILD_TESTS=%s" % self.build_tests,
             "-DDISABLE_DOCSTRINGS=True",
             "-DCMAKE_BUILD_TYPE=%s" % self.build_type,
             "-DCMAKE_INSTALL_PREFIX=%s" % self.install_dir,
