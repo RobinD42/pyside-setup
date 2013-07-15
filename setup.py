@@ -24,15 +24,18 @@ REQUIREMENTS:
 OPTIONAL:
 OpenSSL: You can specify the location of OpenSSL DLLs with option --opnessl=</path/to/openssl/bin>.
     You can download OpenSSL for windows here: http://slproweb.com/products/Win32OpenSSL.html
-
-NOTES:
-Building 64bit version is not supported with Visual Studio 2008 Express Edition.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.3.0dev"
 
 submodules = {
     __version__: [
+        ["shiboken", "master"],
+        ["pyside", "master"],
+        ["pyside-tools", "master"],
+        ["pyside-examples", "master"],
+    ],
+    '1.2.0': [
         ["shiboken", "1.2.0"],
         ["pyside", "1.2.0"],
         ["pyside-tools", "0.2.14"],
@@ -937,7 +940,7 @@ setup(
     author = 'PySide Team',
     author_email = 'contact@pyside.org',
     url = 'http://www.pyside.org',
-    download_url = 'http://releases.qt-project.org/pyside',
+    download_url = 'http://download.qt-project.org/official_releases/pyside/',
     license = 'LGPL',
     packages = ['PySide', 'pysideuic'],
     package_dir = {'': 'pyside_package'},

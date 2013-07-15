@@ -36,7 +36,7 @@ Installing PySide on a Windows System
 There are two options to install PySide on Windows:
 
 #. Download and install the packages from the `releases page
-   <http://releases.qt-project.org/pyside/>`_.
+   <http://download.qt-project.org/official_releases/pyside/>`_.
 
 #. Use setuptools:
    
@@ -67,17 +67,21 @@ Installing prerequisities
 #. Install `Python
    <http://www.python.org/download/>`_.
 
-#. Install `Qt 4.8 libraries for Windows (VS 2008)
-   <http://releases.qt-project.org/qt4/source/qt-win-opensource-4.8.4-vs2008.exe>`_.
+#. Install `Qt 4.8 libraries for Windows VS 2008 edition
+   <http://download.qt-project.org/official_releases/qt/4.8/4.8.4/qt-win-opensource-4.8.4-vs2008.exe>`_
+   when building against Python 2.6, 2.7 or 3.2.
+   Install `Qt 4.8 libraries for Windows VS 2010 edition
+   <http://download.qt-project.org/official_releases/qt/4.8/4.8.4/qt-win-opensource-4.8.4-vs2010.exe>`_
+   when building against Python 3.3.
 
 #. Install `Cmake
    <http://www.cmake.org/cmake/resources/software.html>`_.
 
-#. Install `Visual Studio Express 2008
-   <http://www.microsoft.com/express/Downloads/>`_
+#. Install `Windows SDK v6.1
+   <http://www.microsoft.com/en-us/download/details.aspx?id=11310>`_
    when building against Python 2.6, 2.7 or 3.2.
-   Install `Visual Studio Express 2010
-   <http://www.microsoft.com/visualstudio/eng/products/visual-studio-2010-express>`_
+   Install `Windows SDK v7.1
+   <http://www.microsoft.com/en-us/download/details.aspx?id=8279>`_
    when building against Python 3.3.
 
 #. Install `Git
@@ -96,8 +100,8 @@ Installing prerequisities
 
       c:\> c:\Python27\python distribute_setup.py
 
-Building and installing PySide distribution
--------------------------------------------
+Building PySide distribution
+----------------------------
 
 #. Clone ``PySide`` setup scripts from git repository:
 
@@ -115,13 +119,22 @@ Building and installing PySide distribution
 
    ::
 
-      c:\> c:\Python27\python.exe setup.py bdist_wininst --qmake=c:\Qt\4.8.4\bin\qmake.exe --openssl=c:\OpenSSL32bit\bin
+      c:\> c:\Python27\python.exe setup.py bdist_wininst --version=1.2.0 --qmake=c:\Qt\4.8.4\bin\qmake.exe --openssl=c:\OpenSSL32bit\bin
 
 #. Optionally you can specify the msvc compiler version:
 
    ::
 
-      c:\> c:\Python27\python.exe setup.py bdist_wininst --msvc-version=10.0 --qmake=c:\Qt\4.8.4\bin\qmake.exe --openssl=c:\OpenSSL32bit\bin
+      c:\> c:\Python27\python.exe setup.py bdist_wininst --msvc-version=10.0 --version=1.2.0 --qmake=c:\Qt\4.8.4\bin\qmake.exe --openssl=c:\OpenSSL32bit\bin
+
+#. To build the development version of ``PySide`` windows installer, ignore the --version parameter:
+
+   ::
+
+      c:\> c:\Python27\python.exe setup.py bdist_wininst --qmake=c:\Qt\4.8.4\bin\qmake.exe --openssl=c:\OpenSSL32bit\bin
+
+Installing PySide distribution
+------------------------------
 
 #. After the successful build, install the distribution with easy_install:
    
@@ -169,8 +182,8 @@ Installing prerequisities
 
       $ sudo python2.7 distribute_setup.py
 
-Building and installing PySide distribution
--------------------------------------------
+Building PySide distribution
+----------------------------
 
 #. Clone ``PySide`` setup scripts from git repository:
 
@@ -188,20 +201,22 @@ Building and installing PySide distribution
 
    ::
 
-      $ python2.7 setup.py bdist_egg
+      $ python2.7 setup.py bdist_egg --version=1.2.0
 
 #. Optionally you can build standalone version of distribution with embedded Qt libs:
 
    ::
 
-      $ python2.7 setup.py bdist_egg --standalone
+      $ python2.7 setup.py bdist_egg --standalone --version=1.2.0
 
-#. After the successful build, install the distribution with easy_install
-   and run the post-install script:
-   
+#. To build the development version of ``PySide`` distribution, ignore the --version parameter:
+
    ::
 
-      $ sudo easy_install-2.7 dist/PySide-1.2.0-py2.7.egg
+      $ python2.7 setup.py bdist_egg
+
+Installing PySide distribution
+------------------------------
 
 #. After the successful build, install the distribution with easy_install
    and run the post-install script:
@@ -314,6 +329,23 @@ Feedback and getting involved
 Changes
 =======
 
+1.2.1 (2013-07-??)
+------------------
+
+Major changes
+~~~~~~~~~~~~~
+
+PySide
+******
+
+Shiboken
+********
+
+PySide-setup
+************
+
+- Support for building windows binaries with only Windows SDK installed (Visual Studio is no more required)
+
 1.2.0 (2013-07-02)
 ------------------
 
@@ -336,7 +368,7 @@ PySide-setup
 ************
 
 - On Windows system, when installing PySide binary distribution via easy_install,
-  there is mo more need to call the post-install script
+  there is no more need to call the post-install script
 - Support for building windows binaries outside of Visual Studio command prompt
 - Build and package the shiboken docs when sphinx is installed
 
