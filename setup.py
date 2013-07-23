@@ -580,9 +580,11 @@ class pyside_build(_build):
         
         if sys.platform == 'darwin':
             if 'QTDIR' in os.environ:
-                # If the user has QTDIR set, then use it as a prefix for an extra include path
-                cmake_cmd.append('-DALTERNATIVE_QT_INCLUDE_DIR={0}/include'.format(os.environ['QTDIR']))
-                #:{0}/lib  I had problems specifying both dirs.  Is it needed? Is there some other way to do it? --Robin
+                # If the user has QTDIR set, then use it as a prefix for an
+                # extra include path. Since Qt could be installed either as
+                # normal libs and headers (in {prefix}/include) or as
+                # Frameworks in {prefix}/lib then we'll specify both here.
+                cmake_cmd.append('-DALTERNATIVE_QT_INCLUDE_DIR:PATH={0}/lib:{0}/include'.format(os.environ['QTDIR']))
             else:
                 # Otherwise assume it is a standard install and add the
                 # Frameworks folder as a workaround for a cmake include problem
