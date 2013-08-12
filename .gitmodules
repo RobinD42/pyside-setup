@@ -9,4 +9,4 @@
 	url=https://github.com/RobinD42/pyside-tools.git
 [submodule "sources/pyside-examples"]
 	path = sources/pyside-examples
-	url = https://git.gitorious.org/pyside/pyside-examples.git
+	url = https://github.com/PySide/Examples.git

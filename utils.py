@@ -64,6 +64,66 @@ def update_env_path(newpaths, logger):
             os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
 
 
+def winsdk_setenv(platform_arch, build_type, logger):
+    from distutils.msvc9compiler import VERSION as MSVC_VERSION
+    from distutils.msvc9compiler import Reg
+    from distutils.msvc9compiler import HKEYS
+    from distutils.msvc9compiler import WINSDK_BASE
+
+    sdk_version_map = {
+        "v6.0a": 9.0,
+        "v6.1": 9.0,
+        "v7.0": 9.0,
+        "v7.0a": 10.0,
+        "v7.1": 10.0
+    }
+
+    logger.info("Searching Windows SDK with MSVC compiler version %s" % MSVC_VERSION)
+    setenv_paths = []
+    for base in HKEYS:
+        sdk_versions = Reg.read_keys(base, WINSDK_BASE)
+        if sdk_versions:
+            for sdk_version in sdk_versions:
+                installationfolder = Reg.get_value(WINSDK_BASE + "\\" +
+                    sdk_version, "installationfolder")
+                productversion = Reg.get_value(WINSDK_BASE + "\\" +
+                    sdk_version, "productversion")
+                setenv_path = os.path.join(installationfolder, os.path.join(
+                    'bin', 'SetEnv.cmd'))
+                if not os.path.exists(setenv_path):
+                    continue
+                if not sdk_version in sdk_version_map:
+                    continue
+                if sdk_version_map[sdk_version] != MSVC_VERSION:
+                    continue
+                setenv_paths.append(setenv_path)
+    if len(setenv_paths) == 0:
+        raise DistutilsSetupError(
+            "Failed to find the Windows SDK with MSVC compiler version %s"
+                % MSVC_VERSION)
+    for setenv_path in setenv_paths:
+        logger.info("Found %s" % setenv_path)
+
+    # Get SDK env (use latest SDK version installed on system)
+    setenv_path = setenv_paths[-1]
+    logger.info("Using %s " % setenv_path)
+    build_arch = "/x86" if platform_arch.startswith("32") else "/x64"
+    build_type = "/Debug" if build_type.lower() == "debug" else "/Release"
+    setenv_cmd = [setenv_path, build_arch, build_type]
+    setenv_env = get_environment_from_batch_command(setenv_cmd)
+    setenv_env_paths = os.pathsep.join([setenv_env[k] for k in setenv_env if k.upper() == 'PATH']).split(os.pathsep)
+    setenv_env_without_paths = dict([(k, setenv_env[k]) for k in setenv_env if k.upper() != 'PATH'])
+
+    # Extend os.environ with SDK env
+    logger.info("Initializing Windows SDK env...")
+    update_env_path(setenv_env_paths, logger)
+    for k in sorted(setenv_env_without_paths):
+        v = setenv_env_without_paths[k]
+        logger.info("Inserting \"%s = %s\" to environment" % (k, v))
+        os.environ[k] = v
+    logger.info("Done initializing Windows SDK env")
+
+
 def find_vcdir(version):
     """
     This is the customized version of distutils.msvc9compiler.find_vcvarsall method
@@ -111,58 +171,42 @@ def find_vcdir(version):
     return productdir
 
 
-def find_vcdirs(versions):
-    paths = []
-    for version in versions:
-        vcdir_path = find_vcdir(version)
-        if vcdir_path:
-            paths.append([version, vcdir_path])
-    return paths
+def init_msvc_env(platform_arch, build_type, logger):
+    from distutils.msvc9compiler import VERSION as MSVC_VERSION
 
-
-def init_msvc_env(default_msvc_version, platform_arch, logger):
-    logger.info("Searching vcvars.bat")
-
-    all_vcdirs = find_vcdirs([9.0, 10.0, 11.0])
-    if len(all_vcdirs) == 0:
+    logger.info("Searching MSVC compiler version %s" % MSVC_VERSION)
+    vcdir_path = find_vcdir(MSVC_VERSION)
+    if not vcdir_path:
         raise DistutilsSetupError(
-            "Failed to find the MSVC compiler on your system.")
-
-    all_vcvars = []
-    for v in all_vcdirs:
-        if platform_arch.startswith("32"):
-            vcvars_path = os.path.join(v[1], "bin", "vcvars32.bat")
-        else:
-            vcvars_path = os.path.join(v[1], "bin", "vcvars64.bat")
-            if not os.path.exists(vcvars_path):
-                vcvars_path = os.path.join(v[1], "bin", "amd64", "vcvars64.bat")
-        if os.path.exists(vcvars_path):
-            all_vcvars.append([v[0], vcvars_path])
-
-    if len(all_vcvars) == 0:
-        raise DistutilsSetupError(
-            "Failed to find the MSVC compiler on your system.")
-    for v in all_vcvars:
-        logger.info("Found %s" % v[1])
-
-    if default_msvc_version:
-        msvc_version = float(default_msvc_version)
-        vcvarsall_path_tmp = [p for p in all_vcvars if p[0] == msvc_version]
-        vcvarsall_path = vcvarsall_path_tmp[0][1] if len(vcvarsall_path_tmp) > 0 else None
-        if not vcvarsall_path:
-            raise DistutilsSetupError(
-                "Failed to find the vcvars.bat for MSVC version %s." % msvc_version)
+            "Failed to find the MSVC compiler version %s on your system." % MSVC_VERSION)
     else:
-        # By default use first MSVC compiler found in system
-        msvc_version = all_vcvars[0][0]
-        vcvarsall_path = all_vcvars[0][1]
+        logger.info("Found %s" % vcdir_path)
+
+    logger.info("Searching MSVC compiler %s environment init script" % MSVC_VERSION)
+    if platform_arch.startswith("32"):
+        vcvars_path = os.path.join(vcdir_path, "bin", "vcvars32.bat")
+    else:
+        vcvars_path = os.path.join(vcdir_path, "bin", "vcvars64.bat")
+        if not os.path.exists(vcvars_path):
+            vcvars_path = os.path.join(vcdir_path, "bin", "amd64", "vcvars64.bat")
+            if not os.path.exists(vcvars_path):
+                vcvars_path = os.path.join(vcdir_path, "bin", "amd64", "vcvarsamd64.bat")
+
+    if not os.path.exists(vcvars_path):
+        # MSVC init script not found, try to find and init Windows SDK env
+        logger.error(
+            "Failed to find the MSVC compiler environment init script (vcvars.bat) on your system.")
+        winsdk_setenv(platform_arch, build_type, logger)
+        return
+    else:
+        logger.info("Found %s" % vcvars_path)
 
     # Get MSVC env
-    logger.info("Using MSVC %s in %s" % (msvc_version, vcvarsall_path))
+    logger.info("Using MSVC %s in %s" % (MSVC_VERSION, vcvars_path))
     msvc_arch = "x86" if platform_arch.startswith("32") else "amd64"
     logger.info("Getting MSVC env for %s architecture" % msvc_arch)
-    vcvarsall_cmd = [vcvarsall_path, msvc_arch]
-    msvc_env = get_environment_from_batch_command(vcvarsall_cmd)
+    vcvars_cmd = [vcvars_path, msvc_arch]
+    msvc_env = get_environment_from_batch_command(vcvars_cmd)
     msvc_env_paths = os.pathsep.join([msvc_env[k] for k in msvc_env if k.upper() == 'PATH']).split(os.pathsep)
     msvc_env_without_paths = dict([(k, msvc_env[k]) for k in msvc_env if k.upper() != 'PATH'])
 
@@ -366,7 +410,7 @@ def get_environment_from_batch_command(env_cmd, initial=None):
     # create a tag so we can tell in the output when the proc is done
     tag = 'Done running command'
     # construct a cmd.exe command to do accomplish this
-    cmd = 'cmd.exe /s /c "{env_cmd} && echo "{tag}" && set"'.format(**vars())
+    cmd = 'cmd.exe /E:ON /V:ON /s /c "{env_cmd} && echo "{tag}" && set"'.format(**vars())
     # launch the process
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=initial)
     # parse the output sent to stdout

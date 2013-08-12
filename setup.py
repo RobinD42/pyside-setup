@@ -58,7 +58,7 @@ submodules = {
 try:
     import setuptools
 except ImportError:
-    from distribute_setup import use_setuptools
+    from ez_setup import use_setuptools
     use_setuptools()
 
 import os
@@ -101,7 +101,6 @@ OPTION_VERSION = option_value("version")
 OPTION_LISTVERSIONS = has_option("list-versions")
 OPTION_MAKESPEC = option_value("make-spec")
 OPTION_IGNOREGIT = has_option("ignore-git")
-OPTION_MSVCVERSION = option_value("msvc-version")
 OPTION_NOEXAMPLES = has_option("no-examples")     # don't include pyside-examples
 OPTION_JOBS = option_value('jobs')                # number of parallel build jobs
 OPTION_JOM = has_option('jom')                    # use jom instead of nmake with msvc
@@ -119,13 +118,6 @@ if sys.platform == "win32":
     if not OPTION_MAKESPEC in ["msvc", "mingw"]:
         print("Invalid option --make-spec. Available values are %s" % (["msvc", "mingw"]))
         sys.exit(1)
-    if OPTION_MSVCVERSION:
-        if OPTION_MAKESPEC != "msvc":
-            print("Option --msvc-version can be used only with option --make-spec=msvc")
-            sys.exit(1)
-        if not OPTION_MSVCVERSION in ["9.0", "10.0", "11.0"]:
-            print("Invalid option --msvc-version. Available values are %s" % (["9.0", "10.0", "11.0"]))
-            sys.exit(1)
 else:
     if OPTION_MAKESPEC is None:
         OPTION_MAKESPEC = "make"
@@ -295,11 +287,11 @@ class pyside_build(_build):
     def run(self):
         platform_arch = platform.architecture()[0]
         log.info("Python architecture is %s" % platform_arch)
-        
-        # Try to init the MSVC environment
-        if sys.platform == "win32" and OPTION_MAKESPEC == "msvc":
-            init_msvc_env(OPTION_MSVCVERSION, platform_arch, log)
-        
+
+        build_type = OPTION_DEBUG and "Debug" or "Release"
+        if OPTION_RELWITHDEBINFO:
+            build_type = 'RelWithDebInfo'
+
         # Check env
         make_path = None
         make_generator = None
@@ -308,6 +300,12 @@ class pyside_build(_build):
                 make_name = "make"
                 make_generator = "Unix Makefiles"
             elif OPTION_MAKESPEC == "msvc":
+                nmake_path = find_executable("nmake")
+                if nmake_path is None or not os.path.exists(nmake_path):
+                    log.info("nmake not found. Trying to initialize the MSVC env...")
+                    init_msvc_env(platform_arch, build_type, log)
+                else:
+                    log.info("nmake was found in %s" % nmake_path)
                 if OPTION_JOM:
                     make_name = "jom"
                     make_generator = "NMake Makefiles JOM"
@@ -337,9 +335,6 @@ class pyside_build(_build):
                 " Please specify the path to qmake with --qmake parameter.")
         
         # Prepare parameters
-        build_type = OPTION_DEBUG and "Debug" or "Release"
-        if OPTION_RELWITHDEBINFO:
-            build_type = 'RelWithDebInfo'
         py_executable = sys.executable
         py_version = "%s.%s" % (sys.version_info[0], sys.version_info[1])
         py_include_dir = get_config_var("INCLUDEPY")
@@ -905,7 +900,8 @@ setup(
     name = "PySide",
     version = __version__,
     description = ("Python bindings for the Qt cross-platform application and UI framework"),
-    long_description = read('README.rst'),
+    long_description = open("README.rst").read() + "\n" +
+                       open("CHANGES.rst").read(),
     options = {
         "bdist_wininst": {
             "install_script": "pyside_postinstall.py",
